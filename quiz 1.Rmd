@@ -1,0 +1,114 @@
+---
+title: "CapStone Quiz# 1"
+author: "Saurabh Thakur"
+date: "February 24, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Question 1
+
+The en_US.blogs.txt file is how many megabytes?
+
+```{r file_size, echo = TRUE}
+setwd("D:/R/Work/CapStone/training data/final/en_US")
+mb <- (file.info("en_US.blogs.txt")$size)/1024/1024
+sprintf("The file is %s megabytes", mb)
+```
+
+##Question 2
+
+The en_US.twitter.txt has how many lines of text?
+
+```{r file_length, echo=TRUE}
+setwd("D:/R/Work/CapStone/training data/final/en_US")
+
+f <- file("en_US.twitter.txt", open="rb")
+
+nlines <- 0L
+while (length(chunk <- readBin(f, "raw", 65536)) > 0) {
+    nlines <- nlines + sum(chunk == as.raw(10L))
+}
+close(f)
+sprintf("The file has %s lines.", nlines)
+
+```
+
+##Question 3
+
+What is the longest length of the line seen in any of three en_US files?
+
+```{r line_length, echo=TRUE}
+setwd("D:/R/Work/CapStone/training data/final/en_US")
+
+news <- file("en_US.news.txt", open="rb")
+#news_lines <- readLines(file("en_US.news.txt", open="rb"))
+news_lines <- readLines(news)
+close(news)
+newsl <- summary(nchar(news_lines))[6]
+
+blogs <- file("en_US.blogs.txt", open="rb")
+blog_lines <- readLines(blogs)
+close(blogs)
+blogsl <- summary(nchar(blog_lines))[6]
+
+twitter <- file("en_US.twitter.txt", open="rb")
+twitter_lines <- readLines(twitter)
+close(twitter)
+twitterl <- summary(nchar(twitter_lines))[6]
+
+if (blogsl > newsl) 
+    {
+    if (blogsl > twitterl) 
+        {
+        largestl <- blogsl
+        filenam <- "en_US.blogs.txt"
+        } else if (twitterl > newsl)
+        {
+            largestl <- twitterl
+            filenam <- "en_US.twitter.txt"
+        }
+} else if(newsl > twitterl) 
+{
+    largestl <- newsl
+    filenam <- "en_US.news.txt"
+        }
+
+sprintf("The longest line is %s chars in file %s.",largestl, filenam)
+
+```
+
+##Question 4
+
+In the en_US twitter data set, if you divide the number of lines where the word "love" (all lowercase) occurs by the number of lines the word "hate" (all lowercase) occurs, about what do you get?
+
+```{r q6, echo = TRUE}
+div <- length(grep("love", twitter_lines))/length(grep("hate", twitter_lines))
+
+sprintf("We get %s",div)
+```
+
+##Question 5
+
+The one tweet in the en_US twitter data set that matches the word "biostats" says what?
+
+```{r q4, echo=TRUE}
+biostat <- grep("biostats", twitter_lines, value = T)
+
+print(biostat)
+```
+
+##Question 6
+
+How many tweets have the exact characters "A computer once beat me at chess, but it was no match for me at kickboxing". (I.e. the line matches those characters exactly.)
+
+```{r q5, echo=TRUE}
+lns <- grep("A computer once beat me at chess, but it was no match for me at kickboxing", twitter_lines)
+
+print(lns)
+```
+
