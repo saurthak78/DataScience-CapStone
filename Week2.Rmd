@@ -1,0 +1,229 @@
+---
+title: "Data Science Specialization Capstone Project Week 2"
+author: "Saurabh Thakur"
+date: "March 2, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The goal of this project is just to display that we've gotten used to working 
+with the data and that we are on track to create your prediction algorithm. 
+
+
+
+###The motivation for this project is to: ###
+1. Demonstrate that you've downloaded the data and have successfully loaded it in.
+2. Create a basic report of summary statistics about the data sets.
+3. Report any interesting findings that you amassed so far.
+4. Get feedback on your plans for creating a prediction algorithm and Shiny app.
+
+```{r def_lib, echo=TRUE,warning=FALSE}
+library(knitr, quietly = TRUE)
+library(doParallel, quietly = TRUE)
+library(stringi, quietly = TRUE)
+library(SnowballC, quietly = TRUE)
+library(tm, quietly = TRUE)
+
+```
+
+## Basic details about the files and data## 
+
+###Read the files from the working directory and summarize properties###
+
+```{r read_file, echo=TRUE}
+
+path1 <- "D:/R/Work/CapStone/training data/final/en_US/en_US.blogs.txt"
+path2 <- "D:/R/Work/CapStone/training data/final/en_US/en_US.twitter.txt"
+path3 <- "D:/R/Work/CapStone/training data/final/en_US/en_US.news.txt"
+
+conn <- file(path1, open = "rb")
+blogs <- readLines(conn, encoding = "UTF-8")
+close(conn)
+
+conn <- file(path2, open = "rb")
+twitter <- readLines(conn, encoding = "UTF-8")
+close(conn)
+
+conn <- file(path3, open = "rb")
+news <- readLines(conn, encoding = "UTF-8")
+close(conn)
+
+rm(conn)
+
+file_stats <- data.frame(
+    fileName = c("en_US.blogs",
+                    "en_US.twitter",
+                    "en_US.news"),
+    fileSize = c(file.info(path1)$size/1024^2,
+                    file.info(path2)$size/1024^2,
+                    file.info(path3)$size/1024^2),
+    t(rbind(sapply(list(blogs, twitter, news), stri_stats_general),
+        WordCount = sapply(list(blogs, twitter, news), stri_stats_latex)[4,]))
+    )
+kable(file_stats)
+```
+
+## Data Clean up and Analysis##
+
+We will take only a sample of the data for the analysis as the actual files are huge.
+WE will remove the special characters, White spaces, punctuations etc from the sample.
+We will also remove the profanity from the data. We will be using the badword data from the following google link  [https://code.google.com/archive/p/badwordslist/downloads].
+
+```{r smpl_clean, echo=TRUE, warning=FALSE}
+set.seed(2980)
+
+smpl_Blogs <- blogs[sample(1:length(blogs), 12000, replace=FALSE)]
+smpl_Twitter <- twitter[sample(1:length(twitter), 12000, replace=FALSE)]
+smpl_News <- news[sample(1:length(news), 12000, replace=FALSE)]
+
+clean_the_data <- function (x) 
+    {
+      smpl_data <- x
+      for (i in 1:length(smpl_data)) 
+          {
+            orig_row <- smpl_data[i]
+            cleaned_row <- iconv(orig_row, "UTF-8", "ASCII", sub = "")
+            smpl_data[i] <- cleaned_row
+          }
+        return(smpl_data)
+    }
+
+# Clean the sampled data
+
+smpl_Blogs <- clean_the_data(smpl_Blogs)
+smpl_Twitter <- clean_the_data(smpl_Twitter)
+smpl_News <- clean_the_data(smpl_News)
+
+# Merge the cleaned data and delete the intermediate files
+
+smpl_data <- list(smpl_Blogs, smpl_Twitter, smpl_News)
+
+rm(blogs, news, twitter, path1, path2, path3, path4)
+
+corpus <- list()
+dtMatrix <- list()
+
+profanity  <- readLines("D:/R/Work/CapStone/training data/final/en_US/badwords.txt", n=457)
+
+removeProfanity <- content_transformer(function(x) {
+                for(i in 1:length(profanity))
+                    {
+                        x <-  gsub(profanity[i],"", x)
+                    }
+                    return(x)
+                })
+
+for (i in 1 : length(smpl_data)) 
+    {
+        corpus[[i]] <- Corpus(VectorSource(smpl_data[[i]]))
+        corpus[[i]] <- tm_map(corpus[[i]], tolower)
+        corpus[[i]] <- tm_map(corpus[[i]], removePunctuation)
+        corpus[[i]] <- tm_map(corpus[[i]], removeNumbers)
+        corpus[[i]] <- tm_map(corpus[[i]], stripWhitespace)
+        corpus[[i]] <- tm_map(corpus[[i]], removeProfanity)
+        corpus[[i]] <- tm_map(corpus[[i]], removeWords, stopwords("english"))
+        corpus[[i]] <- tm_map(corpus[[i]], stemDocument)
+        dtMatrix[[i]] <- DocumentTermMatrix(corpus[[i]],
+            control=list(wordLengths=c(0,Inf)))
+    }
+
+rm(smpl_data)
+
+```
+
+##Plot Sampled Corpus Data with Word Cloud##
+With the help of the wordcloud package we are showing what each corpus looks like. 
+Here is the example for US English Blogs corpus. Other two corpora or the combination of the total three also can be used in the similar way.
+
+
+```{r smpl_corpus, echo=TRUE,warning=FALSE}
+library(wordcloud, quietly = TRUE)
+library(slam, quietly = TRUE)
+
+# Set random seed for reproducibility
+set.seed(2980)
+# Set Plotting in 1 row 3 columns
+par(mfrow=c(1, 3))
+Headings= c("Word Cloud - US English Blogs",
+            "Word Cloud - US English Twitter",        
+            "Word Cloud - US English News")
+
+# Iterate each corpus and dtMatrix and plot word cloud (Max = 100)
+for (i in 1:length(corpus)) {
+    wordcloud(words = colnames(dtMatrix[[i]]), freq = slam::col_sums(dtMatrix[[i]]), 
+        scale = c(3, 1), max.words = 100, random.order = FALSE, rot.per = 0.45, 
+        use.r.layout = FALSE, colors = brewer.pal(8, "Dark2"))
+    title(Headings[i])
+}
+
+```
+
+
+##Plots based on the cleaned data##
+
+We have created plots here which are showing how many times the words are getting repeated in the corpus. The "Unigrams", "Bigrams" and "Trigrams" are being shown here.
+
+
+```{r plots, echo=TRUE, warning=FALSE}
+library(dplyr, quietly = TRUE)
+library(qdap) 
+library(rJava)#.jinit(parameters="-Xmx128g")
+library(RWeka) 
+library(ggplot2, quietly = TRUE)
+
+# Define a function to make Unigram, Bigram and Trigram from the corpus
+# And then Plot them together with ggplot2 and gridExtra packages
+
+plot.Grams <- function (x=smpl_Blogs, subTitle="Blogs", N=10) {
+
+    # Use RWeka to get unigram token
+    Tokenizer1 <- RWeka::NGramTokenizer(x, Weka_control(min = 1, max = 1))
+    Gram.1 <- data.frame(table(Tokenizer1))
+    Gram.1 <- Gram.1[order(Gram.1$Freq, decreasing = TRUE),]
+    colnames(Gram.1) <- c("Word", "Freq")
+    Gram.1 <- head(Gram.1, N) 
+    g1 <- ggplot(Gram.1, aes(x=reorder(Word, Freq),y=Freq)) + 
+            geom_bar(stat="identity", fill="green") + 
+            ggtitle(paste("Unigrams", "-", subTitle)) + 
+            xlab("Unigrams") + ylab("Frequency") + 
+            theme(axis.text.x=element_text(angle=90, hjust=1))
+
+    # Use RWeka to get bigram token
+    Tokenizer2 <- RWeka::NGramTokenizer(x, 
+        Weka_control(min = 2, max = 2,delimiters = "\\r\\n\\t.,;:\"()?!"))
+    Gram.2 <- data.frame(table(Tokenizer2))
+    Gram.2 <- Gram.2[order(Gram.2$Freq, decreasing = TRUE),]
+    colnames(Gram.2) <- c("Word", "Freq")
+    Gram.2 <- head(Gram.2, N) 
+    g2 <- ggplot(Gram.2, aes(x=reorder(Word, Freq),y=Freq)) + 
+            geom_bar(stat="identity", fill="blue") + 
+            ggtitle(paste("Bigrams", "-", subTitle)) + 
+            xlab("Bigrams") + ylab("Frequency") + 
+            theme(axis.text.x=element_text(angle=90, hjust=1))
+    
+    # Use RWeka to get trigram token
+    Tokenizer3 <- RWeka::NGramTokenizer(smpl_Blogs, 
+        Weka_control(min = 3, max = 3, delimiters = " \\r\\n\\t.,;:\"()?!"))
+    Gram.3 <- data.frame(table(Tokenizer3))
+    Gram.3 <- Gram.3[order(Gram.3$Freq, decreasing = TRUE),]
+    colnames(Gram.3) <- c("Word", "Freq")
+    Gram.3 <- head(Gram.3, N) 
+    g3 <- ggplot(Gram.3, aes(x=reorder(Word, Freq),y=Freq)) + 
+            geom_bar(stat="identity", fill="darkgreen") + 
+            ggtitle(paste("Trigrams", "-", subTitle)) + 
+            xlab("Trigrams") + ylab("Frequency") + 
+            theme(axis.text.x=element_text(angle=90, hjust=1))
+    
+    # Put three plots into 1 row 3 columns
+    gridExtra::grid.arrange(g1, g2, g3, ncol = 3)
+}
+
+plot.Grams(x = smpl_Blogs, subTitle = "Blogs", N = 12)
+plot.Grams(x = smpl_Twitter, subTitle = "Twitter", N = 12)
+plot.Grams(x = smpl_News, subTitle = "News", N = 12)
+
+```
+
